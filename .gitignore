@@ -1,0 +1,8 @@
+/bin/
+/target/
+/classes/
+*.log
+.idea
+.metadata
+neenart.iml
+/src/symbolic_algebra

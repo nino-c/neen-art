@@ -1,0 +1,5 @@
+(start)
+(test)
+(println 6)
+(. System exit 0)
+(+ 3 4)
