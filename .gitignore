@@ -1,8 +1,13 @@
 /bin/
 /target/
 /classes/
+.settings
 *.log
 .idea
 .metadata
+.classpath
+.project
+.nrepl-port
+.lein-repl-history
 neenart.iml
 /src/symbolic_algebra

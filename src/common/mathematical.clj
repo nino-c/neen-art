@@ -21,6 +21,8 @@
 (defn round* [x precision]
   (double (/ (round (* x precision)) precision)))
 
+(defn nth-triangular [n]
+  (last (map #(reduce + (range %)) (range n))))
 
 ;; ============================
 ;; Linear algebra
@@ -73,10 +75,16 @@
                           "y^" (:y term))) 
                    terms))}))
                
-(defn random-polynomial [degree]
-  (let [coefficients (take 20 
-          (repeatedly #(round* (- (* (rand) 20) 10) 100)))]
-    (multivariate-polynomial degree coefficients)))
+(defn random-polynomial
+  ([degree] (random-polynomial degree 100))
+  ([degree ^Integer coefficient-variance]
+    (let [num-terms    (- (nth-triangular (+ degree 3)) 1)
+          coefficients (take num-terms 
+          (repeatedly #(round* (- (* (rand) 
+                                     coefficient-variance) 
+                                  (/ coefficient-variance 2)) 100)))]
+      ;(println (str num-terms " terms!"))
+      (multivariate-polynomial degree coefficients))))
 
 
 ;; ============================

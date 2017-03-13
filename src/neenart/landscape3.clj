@@ -16,9 +16,9 @@
 ;; ===========================
 ;; Settings
 
-(def x-range (linspace -2 2 0.5))
-(def y-range (linspace 0 2 0.5))
-(def polynomial-degree 5)
+(def x-range (linspace -1.1 1.1 0.05))
+(def y-range (linspace 0 2 0.1))
+(def polynomial-degree 7)
 
 ;; ===========================
 ;; Coordinate system
@@ -61,36 +61,23 @@
 
 (def domain-mapped (transform-domain (fn [[x y]] [x y 0.0])))
 
-;(defn sort-vertices
-;  "Takes computed function as mapping of points
-;   and returns as slices ready to draw on screen"
-;  [vertices]
-;  (println (str "vertices&&&&" vertices))
-;  (sort-by (fn [[k v]] [(second k) (first k)]) vertices))
-
 (defn compute-codomain
   [func domain]
-  (println (str "compute: " func "--" domain))
+  ;(println (str "compute: "))
+  ;(println (first domain))
   (apply array-map (interleave domain-x-y 
                                (map (fn [[x y _]] 
                                       [x y (func x y)]) 
                                     (vals domain)))))
 
-;(defn get-vertices
-;  "Computes function, unites image with domain, 
-;   stores in state map"
-;  [func domain]
-;  (println (str "====domain" domain))
-;  (zipmap (keys domain) (map (fn [[k [x y _]]] 
-;                              [x y (func x y)]) domain)))
-
 (defn pre-transform-domain
   "Applies transformation to entire domain,
    and retains a mapping back to the original
    domain for drawing purposes"
-  [matrix domain]
-  (transform-domain (mat/mmul (rotation-matrix 0 0 (/ PI 3)) matrix)))
-
+  [matrix & domain]
+  ;(println "===matr")
+  ;(println domain)
+  (transform-domain #(mat/mmul % matrix)))
 
 ;; ==========================
 ;; Quil functions
@@ -103,53 +90,84 @@
 ;       map storing vertices
 
 (defn update-state [state]
-  (assoc state 
+  (let [theta  (* (/ PI 20) (t))
+        matrix (rotation-matrix 0 0 theta)]
+    (assoc state 
+         :theta    theta
          :codomain (->> domain-mapped
-                     (pre-transform-domain (rotation-matrix 0 0 (/ PI 3)))
-                     )))
+                     (pre-transform-domain matrix)
+                     (compute-codomain 
+                       (:func 
+                         (:surface-function state)))))))
+
+(defn dot [x y]
+  (push-style)
+  (fill 0 50 50)
+  (ellipse x y 0.05 0.05)
+  (pop-style))
 
 (defn draw-state [state]
  (background 0 0 100)
+ (fill 50)
+ (text (str "theta=" (:theta state)) 10 10)
+ (println (str "theta=" (:theta state)))
+ ;(println (:surface-function state))
+ (ellipse 10 10 10 10)
  (let [codomain     (:codomain state)
        slices       (->> codomain
                       (group-by (fn [[k v]] (second k))))
        z-extrema    (get-extrema-of (vals codomain) 2)
-       scale-x      (/ (width)  (range-width x-range))
+       scale-x      (* 1 (/ (width)  (range-width x-range)))
        scale-y      (/ (width)  (range-width x-range))
-       scale-z      (/ (height) (range-width z-extrema))
+       scale-z      (* -1 (/ (height) (range-width z-extrema)))
        height*      (* (height) scale-z)]
    
    (push-matrix)
    (center-origin)
    (scale scale-x scale-z)
    
+   (push-style)
+   (stroke-weight 0.01)
+   ;(line (first x-range) 0 (last x-range) 0)
+   (pop-style)
+   
+   ;(println "codomain---------")
+   ;(println (first codomain) (last codomain))
+   
    (doseq [y-val (keys slices)]
-     (println "slices -- vals")
-     (println (vals (get slices y-val)))
-     (fill (+ PI (- (random 0.5) 0.25)) 30 70 20)
+;     (println "slices -- vals")
+;     (println (vals (get slices y-val)))
+      
+      (fill (+ PI (- (random 0.5) 0.25)) 30 70 20)
       (begin-shape)
-      (vertex (- 0 (/ (width) 2)) (* height* 2))
-      (doseq [[x _ y] (vals (get slices y-val))]
-        (vertex x y))
-      (vertex (/ (width) 2) (* height* 2))
+      ;(println "%%%" (first x-range) "-" (range-width z-extrema))
+      ;(println (vals (get slices y-val)))
+      (vertex (first x-range) (* -0.5 (range-width z-extrema)))
+      (doseq [[k [x _ y]] (get slices y-val)]
+        ;(dot x y)
+        (vertex (first k) y))
+      (vertex (last x-range) (* -0.5 (range-width z-extrema)))
       (end-shape :close))
-   (pop-matrix))
+   (pop-matrix)) 
  state)
 
 (defn setup []
- (frame-rate 3)
- (no-loop)
+ (frame-rate 30)
+ ;(no-loop)
+ (text-font (create-font "DejaVu Sans" 18 true))
  (color-mode :hsb (* 2 PI) 100 100 100)
  (stroke-weight 0.0005)
  (stroke 0 0 10)
+ 
  (let [surface-function   (random-polynomial 
-                            polynomial-degree)
+                            polynomial-degree 5)
+       surface-function'   (multivariate-polynomial polynomial-degree
+                             '(0 -1 0 0 1))
        codomain           (->> domain-mapped
-                            (compute-codomain (:func surface-function)))
-       rotated            (->> domain-mapped
-                            (pre-transform-domain (rotation-matrix 0 0 (/ PI 3))))]
-   (println rotated)
+                            (pre-transform-domain (rotation-matrix 0 0 2))
+                            (compute-codomain (:func surface-function)))]
    {:surface-function     surface-function
+    :theta                2
     :codomain             codomain}))
 
 (defsketch landscape
@@ -157,7 +175,8 @@
   :size        [800 600]
   :middleware  [qm/fun-mode]
   :setup       setup
-  :draw        draw-state)
+  :draw        draw-state
+  :update      update-state)
   
 
 (defn -main [& args]
