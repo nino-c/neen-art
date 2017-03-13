@@ -12,7 +12,6 @@
             [clojure.core.matrix.impl.pprint :as mp]
             [clojure.test :as test]))
 
-
 ;; ===========================
 ;; Settings
 
@@ -25,16 +24,9 @@
 ;;   
 ;; The screen is the `x-z` plane
 ;;   `y` comes "out of the screen"
-;;
+
 ;; the "camera" location
 ;;
-;; ==========================
-;; Names
-;;
-;; Domain
-;; Image
-;;   Domain + Image = Vertices
-
 (def viewpoint [0 0 0])
 ;;
 ;; the direction the camera is looking
@@ -43,14 +35,12 @@
 ;;
 ;; the base domain for the surface function
 ;;   set of ordered pairs: (x,y)
-
-;(def domain-x-y
-;  (for [y y-range x x-range] [x y]))
-
-
+;;
 (def domain-x-y (sort-by (fn [[x y]] [y x]) 
                          (combo/cartesian-product 
                            x-range y-range)))
+
+(def domain-mapped (transform-domain (fn [[x y]] [x y 0.0])))
 
 (defn transform-domain
   "Takes domain as list of ordered pairs and returns
@@ -59,25 +49,38 @@
   [func]
   (apply array-map (interleave domain-x-y (map func domain-x-y))))
 
-(def domain-mapped (transform-domain (fn [[x y]] [x y 0.0])))
-
-(defn compute-codomain
-  [func domain]
-  ;(println (str "compute: "))
-  ;(println (first domain))
-  (apply array-map (interleave domain-x-y 
-                               (map (fn [[x y _]] 
-                                      [x y (func x y)]) 
-                                    (vals domain)))))
-
 (defn pre-transform-domain
   "Applies transformation to entire domain,
    and retains a mapping back to the original
    domain for drawing purposes"
   [matrix & domain]
-  ;(println "===matr")
-  ;(println domain)
   (transform-domain #(mat/mmul % matrix)))
+
+(defn compute-codomain
+  [func domain]
+  (apply array-map (interleave domain-x-y 
+                               (map (fn [[x y _]] 
+                                      [x y (func x y)]) 
+                                    (vals domain)))))
+
+(defn projection 
+  "In lieu of a single affine transformation, the projection
+   from 3-space to 2-space is done procedurally.  (necessary
+   to create non-parallel offsets) 
+      -- currently poopoo"
+  [[x y z]]
+  (let [y-scale    (- 1 (* 0.5 (/ y (range-width y-range))))
+        diag-scale (* 0.5 y-scale)
+        matrix     [[y-scale    0.0 diag-scale]
+                    [diag-scale 0.0 y-scale]]
+        offset     (mat/mul (mat/as-vector (width) (height)) 0.35)]
+    (mo/+ (mat/mmul [x y z] matrix) offset)))
+
+(defn apply-projection
+  [slices]
+  (println "slices------" slices)
+  ;(apply array-map (interleave domain-x-y projection (vals codomain)))
+  )
 
 ;; ==========================
 ;; Quil functions
@@ -108,40 +111,28 @@
 
 (defn draw-state [state]
  (background 0 0 100)
- (fill 50)
- (text (str "theta=" (:theta state)) 10 10)
- (println (str "theta=" (:theta state)))
+ ;(println (str "theta=" (:theta state)))
  ;(println (:surface-function state))
- (ellipse 10 10 10 10)
  (let [codomain     (:codomain state)
        slices       (->> codomain
-                      (group-by (fn [[k v]] (second k))))
+                      (group-by (fn [[k v]] (second k)))
+                      (apply-projection))
        z-extrema    (get-extrema-of (vals codomain) 2)
-       scale-x      (* 1 (/ (width)  (range-width x-range)))
+       scale-x      (/ (width)  (range-width x-range))
        scale-y      (/ (width)  (range-width x-range))
-       scale-z      (* -1 (/ (height) (range-width z-extrema)))
-       height*      (* (height) scale-z)]
+       scale-z      (* -1 (/ (height) (range-width z-extrema)))]
    
    (push-matrix)
    (center-origin)
    (scale scale-x scale-z)
    
-   (push-style)
-   (stroke-weight 0.01)
-   ;(line (first x-range) 0 (last x-range) 0)
-   (pop-style)
-   
    ;(println "codomain---------")
    ;(println (first codomain) (last codomain))
    
-   (doseq [y-val (keys slices)]
-;     (println "slices -- vals")
-;     (println (vals (get slices y-val)))
-      
-      (fill (+ PI (- (random 0.5) 0.25)) 30 70 20)
+   (doseq [y-val (keys slices)]      
+      (fill (+ PI (- (random 0.5) 0.25)) 30 70 15)
       (begin-shape)
-      ;(println "%%%" (first x-range) "-" (range-width z-extrema))
-      ;(println (vals (get slices y-val)))
+      
       (vertex (first x-range) (* -0.5 (range-width z-extrema)))
       (doseq [[k [x _ y]] (get slices y-val)]
         ;(dot x y)
@@ -154,13 +145,12 @@
 (defn setup []
  (frame-rate 30)
  ;(no-loop)
- (text-font (create-font "DejaVu Sans" 18 true))
  (color-mode :hsb (* 2 PI) 100 100 100)
  (stroke-weight 0.0005)
  (stroke 0 0 10)
  
  (let [surface-function   (random-polynomial 
-                            polynomial-degree 5)
+                            polynomial-degree 1.5)
        surface-function'   (multivariate-polynomial polynomial-degree
                              '(0 -1 0 0 1))
        codomain           (->> domain-mapped
